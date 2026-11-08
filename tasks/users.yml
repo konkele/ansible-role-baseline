@@ -14,7 +14,15 @@
       - item.name is defined
       - item.name is string
       - item.name | length > 0
-    fail_msg: "Invalid user definition."
+
+      - item.groups is not defined or item.groups is sequence
+      - item.groups is not defined or item.groups is not string
+
+      - item.authorized_keys is not defined or item.authorized_keys is sequence
+      - item.authorized_keys is not defined or item.authorized_keys is not string
+    fail_msg: >-
+      Invalid user definition for
+      {{ item.name | default('undefined') }}.
   loop: "{{ baseline_users_global + baseline_users_group + baseline_users_host }}"
   loop_control:
     label: "{{ item.name | default('undefined') }}"
@@ -57,11 +65,37 @@
     loop_var: user
     label: "{{ user.name }}"
 
+- name: Ensure supplemental groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: >-
+    {{
+      merged_baseline_users
+      | map(attribute='groups', default=[])
+      | flatten
+      | unique
+      | list
+    }}
+  when:
+    - merged_baseline_users | length > 0
+    - item | length > 0
+
 - name: Ensure user exists
   ansible.builtin.user:
     name: "{{ user.name }}"
     uid: "{{ user.uid | default(omit) }}"
+
     group: "{{ user.name }}"
+
+    groups: >-
+      {{
+        user.groups | default([])
+        | join(',')
+      }}
+
+    append: true
+
     shell: >-
       {{
         user.shell
@@ -70,6 +104,7 @@
             | ternary('/usr/sbin/nologin', '/bin/bash')
           )
       }}
+
     home: "{{ user.home | default(omit) }}"
     create_home: "{{ user.home is defined }}"
     system: "{{ user.system | default(user.home is not defined) }}"

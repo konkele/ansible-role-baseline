@@ -14,6 +14,7 @@ In addition to identity management, the role can install baseline packages, conf
 
 - Create Linux users
 - Create matching primary groups
+- Manage supplemental Linux groups
 - Optional UID and GID assignment
 - Configure SSH authorized keys
 - Configure passwordless sudo access
@@ -85,6 +86,8 @@ When duplicate users exist:
 
 Users can define `authorized_keys` to manage SSH public keys. The `authorized_keys_exclusive` variable defaults to `true` and controls whether unmanaged keys are removed.
 
+Users can optionally define `groups` to manage supplemental Linux group membership. Referenced groups are created automatically and assigned to the user.
+
 ---
 
 ## Platform Metadata
@@ -96,9 +99,9 @@ User definitions may contain additional fields consumed by downstream roles.
 ```yaml
 baseline_users_global:
   - name: admin
-
+    groups:
+      - docker
     department: infrastructure
-
     external_roles:
       - administrator
       - operator
@@ -119,6 +122,10 @@ baseline_users_global:
   - name: admin
     uid: 1000
     sudo: true
+    groups:
+      - docker
+    authorized_keys:
+      - ssh-ed25519 AAAA...
 ```
 
 ### Group-Specific Users
@@ -136,6 +143,18 @@ baseline_users_group:
 baseline_users_host:
   - name: postgres
     uid: 999
+```
+
+### Supplemental Groups
+
+```yaml
+baseline_users_global:
+  - name: konkele
+
+    groups:
+      - docker
+      - libvirt
+      - wireshark
 ```
 
 ---
@@ -162,6 +181,9 @@ baseline_users:
     sudo: true
     system: false
     authorized_keys_exclusive: true
+
+    groups:
+      - docker
 
     authorized_keys:
       - ssh-ed25519 AAAA...

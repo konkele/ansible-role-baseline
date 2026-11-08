@@ -20,6 +20,13 @@ baseline_users:
     system: {{ user.system | default(false) }}
     authorized_keys_exclusive: {{ user.authorized_keys_exclusive | default(true) }}
 
+{% if (user.groups | default([])) | length > 0 %}
+    groups:
+{% for group in user.groups %}
+      - "{{ group }}"
+{% endfor %}
+{% endif %}
+
 {% if (user.authorized_keys | default([])) | length > 0 %}
     authorized_keys:
 {% for key in user.authorized_keys %}
