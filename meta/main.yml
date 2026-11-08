@@ -1,0 +1,36 @@
+---
+galaxy_info:
+  role_name: baseline
+  namespace: konkele
+  author: Eric Konkel
+
+  description: >-
+    Baseline Linux configuration role providing deterministic user
+    management, package installation, timezone configuration, NFS mounts,
+    and shared identity metadata for downstream infrastructure and
+    application roles. User metadata is persisted for consumption by
+    external systems and platform integrations.
+
+  license: MIT
+  min_ansible_version: "2.14"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+
+  galaxy_tags:
+    - baseline
+    - identity
+    - users
+    - ssh
+    - nfs
+    - infrastructure
+
+dependencies: []

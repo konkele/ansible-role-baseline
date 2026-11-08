@@ -1,0 +1,36 @@
+# Managed by Ansible.
+# Do not edit manually.
+
+baseline_users:
+{% for user in baseline_users_model %}
+  - name: "{{ user.name }}"
+{% if user.uid is defined %}
+    uid: {{ user.uid }}
+{% endif %}
+{% if user.gid is defined %}
+    gid: {{ user.gid }}
+{% endif %}
+{% if user.home is defined %}
+    home: "{{ user.home }}"
+{% endif %}
+{% if user.shell is defined %}
+    shell: "{{ user.shell }}"
+{% endif %}
+    sudo: {{ user.sudo | default(false) }}
+    system: {{ user.system | default(false) }}
+    authorized_keys_exclusive: {{ user.authorized_keys_exclusive | default(true) }}
+
+{% if (user.authorized_keys | default([])) | length > 0 %}
+    authorized_keys:
+{% for key in user.authorized_keys %}
+      - "{{ key }}"
+{% endfor %}
+{% endif %}
+
+{% if (user.tags | default([])) | length > 0 %}
+    tags:
+{% for tag in user.tags %}
+      - "{{ tag }}"
+{% endfor %}
+{% endif %}
+{% endfor %}

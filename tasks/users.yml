@@ -1,0 +1,150 @@
+---
+- name: Prevent defining baseline_users directly
+  ansible.builtin.assert:
+    that:
+      - baseline_users is not defined
+    fail_msg: >-
+      Do not define 'baseline_users' in inventory.
+      Use baseline_users_global, baseline_users_group, or
+      baseline_users_host.
+
+- name: Validate user definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+    fail_msg: "Invalid user definition."
+  loop: "{{ baseline_users_global + baseline_users_group + baseline_users_host }}"
+  loop_control:
+    label: "{{ item.name | default('undefined') }}"
+
+- name: Initialize merged user list
+  ansible.builtin.set_fact:
+    merged_baseline_users: []
+
+- name: Merge users from all scopes
+  ansible.builtin.set_fact:
+    merged_baseline_users: >-
+      {{
+        merged_baseline_users
+        | rejectattr('name', 'equalto', item.name)
+        | list
+        +
+        [
+          (
+            (
+              merged_baseline_users
+              | selectattr('name', 'equalto', item.name)
+              | first
+              | default({})
+            )
+            | combine(item, recursive=true, list_merge='append_rp')
+          )
+        ]
+      }}
+  loop: "{{ baseline_users_global + baseline_users_group + baseline_users_host }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Ensure primary group exists
+  ansible.builtin.group:
+    name: "{{ user.name }}"
+    gid: "{{ user.gid | default(user.uid | default(omit)) }}"
+    state: present
+  loop: "{{ merged_baseline_users }}"
+  loop_control:
+    loop_var: user
+    label: "{{ user.name }}"
+
+- name: Ensure user exists
+  ansible.builtin.user:
+    name: "{{ user.name }}"
+    uid: "{{ user.uid | default(omit) }}"
+    group: "{{ user.name }}"
+    shell: >-
+      {{
+        user.shell
+        | default(
+            user.system | default(false)
+            | ternary('/usr/sbin/nologin', '/bin/bash')
+          )
+      }}
+    home: "{{ user.home | default(omit) }}"
+    create_home: "{{ user.home is defined }}"
+    system: "{{ user.system | default(user.home is not defined) }}"
+    state: present
+  loop: "{{ merged_baseline_users }}"
+  loop_control:
+    loop_var: user
+    label: "{{ user.name }}"
+
+- name: Configure sudo privileges
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ user.name }}"
+    content: "{{ user.name }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: user.sudo | default(false)
+  loop: "{{ merged_baseline_users }}"
+  loop_control:
+    loop_var: user
+    label: "{{ user.name }}"
+
+- name: Remove sudo privileges when disabled
+  ansible.builtin.file:
+    path: "/etc/sudoers.d/{{ user.name }}"
+    state: absent
+  when: not (user.sudo | default(false))
+  loop: "{{ merged_baseline_users }}"
+  loop_control:
+    loop_var: user
+    label: "{{ user.name }}"
+
+- name: Ensure .ssh directory exists
+  ansible.builtin.file:
+    path: "{{ user.home }}/.ssh"
+    state: directory
+    owner: "{{ user.name }}"
+    group: "{{ user.name }}"
+    mode: "0700"
+  when:
+    - user.home is defined
+    - user.authorized_keys | default([]) | length > 0
+  loop: "{{ merged_baseline_users }}"
+  loop_control:
+    loop_var: user
+    label: "{{ user.name }}"
+
+- name: Configure authorized keys
+  ansible.posix.authorized_key:
+    user: "{{ user.name }}"
+    key: "{{ user.authorized_keys | join('\n') }}"
+    state: present
+    exclusive: "{{ user.authorized_keys_exclusive | default(true) }}"
+  when: user.authorized_keys | default([]) | length > 0
+  loop: "{{ merged_baseline_users }}"
+  loop_control:
+    loop_var: user
+    label: "{{ user.name }}"
+  no_log: true
+
+- name: Ensure /etc/ansible exists
+  ansible.builtin.file:
+    path: /etc/ansible
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Persist baseline user metadata
+  ansible.builtin.template:
+    src: baseline_users.yml.j2
+    dest: /etc/ansible/baseline_users.yml
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    baseline_users_model: "{{ merged_baseline_users }}"

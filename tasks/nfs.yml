@@ -1,0 +1,26 @@
+---
+- name: Ensure NFS client packages are installed
+  ansible.builtin.apt:
+    name: nfs-common
+    state: present
+    update_cache: false
+
+- name: Ensure NFS mount directories exist
+  ansible.builtin.file:
+    path: "{{ item.dest }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ baseline_nfs_mounts }}"
+  when: baseline_nfs_mounts | length > 0
+
+- name: Mount NFS shares
+  ansible.builtin.mount:
+    path: "{{ item.dest }}"
+    src: "{{ item.src }}"
+    fstype: "{{ item.fstype | default('nfs') }}"
+    opts: "{{ item.opts | default('rw,sync,hard,intr') }}"
+    state: "{{ item.state | default('mounted') }}"
+  loop: "{{ baseline_nfs_mounts }}"
+  when: baseline_nfs_mounts | length > 0

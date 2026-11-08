@@ -1,0 +1,24 @@
+---
+- name: Configure users
+  ansible.builtin.import_tasks: users.yml
+  when: baseline_users_manage | bool
+  tags:
+    - users
+
+- name: Configure timezone
+  ansible.builtin.import_tasks: timezone.yml
+  when: baseline_timezone_manage | bool
+  tags:
+    - timezone
+
+- name: Configure NFS mounts
+  ansible.builtin.import_tasks: nfs.yml
+  when: baseline_nfs_manage | bool
+  tags:
+    - nfs
+
+- name: Install baseline packages
+  ansible.builtin.import_tasks: packages.yml
+  when: baseline_packages_manage | bool
+  tags:
+    - packages

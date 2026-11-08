@@ -1,0 +1,19 @@
+---
+# Users
+baseline_users_manage: true
+
+baseline_users_global: []
+baseline_users_group: []
+baseline_users_host: []
+
+# Timezone
+baseline_timezone_manage: true
+baseline_timezone: "America/Chicago"
+
+# NFS mounts
+baseline_nfs_manage: true
+baseline_nfs_mounts: []
+
+# Packages
+baseline_packages_manage: true
+baseline_packages: []
