@@ -8,6 +8,14 @@ In addition to identity management, the role can install baseline packages, conf
 
 ---
 
+## Requirements
+
+This role performs system-level configuration and executes privileged tasks using Ansible privilege escalation.
+
+The account used to run the role must be permitted to use sudo on the target host.
+
+---
+
 ## Features
 
 ### User Management
@@ -345,7 +353,6 @@ baseline_nfs_mounts:
 ```yaml
 - name: Baseline Configuration
   hosts: all
-  become: true
 
   roles:
     - role: baseline
