@@ -20,6 +20,11 @@
 
       - item.authorized_keys is not defined or item.authorized_keys is sequence
       - item.authorized_keys is not defined or item.authorized_keys is not string
+
+      - item.sudo is not defined or item.sudo is boolean
+      - item.sudo_nopass is not defined or item.sudo_nopass is boolean
+      - not (item.sudo_nopass | default(false) | bool) or (item.sudo | default(false) | bool)
+
     fail_msg: >-
       Invalid user definition for
       {{ item.name | default('undefined') }}.
@@ -117,12 +122,13 @@
 - name: Configure sudo privileges
   ansible.builtin.copy:
     dest: "/etc/sudoers.d/{{ user.name }}"
-    content: "{{ user.name }} ALL=(ALL) NOPASSWD:ALL\n"
+    content: >-
+      {{ user.name }} ALL=(ALL) {{ 'NOPASSWD:' if user.sudo_nopass | default(false) | bool else '' }}ALL
     owner: root
     group: root
     mode: "0440"
     validate: "visudo -cf %s"
-  when: user.sudo | default(false)
+  when: user.sudo | default(false) | bool
   loop: "{{ merged_baseline_users }}"
   loop_control:
     loop_var: user
@@ -132,7 +138,7 @@
   ansible.builtin.file:
     path: "/etc/sudoers.d/{{ user.name }}"
     state: absent
-  when: not (user.sudo | default(false))
+  when: not (user.sudo | default(false) | bool)
   loop: "{{ merged_baseline_users }}"
   loop_control:
     loop_var: user

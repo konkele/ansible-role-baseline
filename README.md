@@ -25,7 +25,8 @@ The account used to run the role must be permitted to use sudo on the target hos
 - Manage supplemental Linux groups
 - Optional UID and GID assignment
 - Configure SSH authorized keys
-- Configure passwordless sudo access
+- Configure optional sudo privileges
+- Support passwordless and password-required sudo
 - Support system accounts
 - Merge user definitions across inventory scopes
 - Persist merged user metadata for downstream consumers
@@ -96,6 +97,47 @@ Users can define `authorized_keys` to manage SSH public keys. The `authorized_ke
 
 Users can optionally define `groups` to manage supplemental Linux group membership. Referenced groups are created automatically and assigned to the user.
 
+### Sudo Configuration
+
+Users can optionally define two attributes to manage sudo privileges:
+
+| Attribute | Default | Description |
+|---|---|---|
+| `sudo` | `false` | Grants sudo privileges |
+| `sudo_nopass` | `false` | Allows passwordless sudo; requires `sudo: true` |
+
+Passwordless sudo is not enabled by default.
+
+Example:
+
+```yaml
+baseline_users_global:
+  - name: admin
+    sudo: true
+    sudo_nopass: true
+
+  - name: ansible
+    sudo: true
+    sudo_nopass: false
+
+  - name: developer
+    sudo: true
+
+  - name: postgres
+    system: true
+```
+
+The resulting behavior:
+
+- `sudo: false` or omitted: No sudo privileges.
+- `sudo: true`: Sudo requires a password.
+- `sudo: true` and `sudo_nopass: true`: Passwordless sudo.
+- `sudo_nopass: true` without `sudo: true`: Invalid configuration.
+
+Both attributes must be YAML booleans (`true` or `false`).
+
+When sudo is disabled, the role removes its previously managed sudoers configuration for that user.
+
 ---
 
 ## Platform Metadata
@@ -111,13 +153,16 @@ baseline_users_global:
     groups:
       - docker
 
+    sudo: true
+    sudo_nopass: true
+
     department: infrastructure
     external_roles:
       - administrator
       - operator
 ```
 
-The baseline role does not interpret these fields.
+The baseline role does not interpret these additional fields.
 
 Any additional user attributes are preserved during the merge process and persisted to the generated metadata file. This allows a single user definition to act as the source of truth for Linux account management and platform-specific integrations.
 
@@ -145,6 +190,7 @@ baseline_users:
     home: /home/admin
     shell: /bin/bash
     sudo: true
+    sudo_nopass: true
     system: false
     authorized_keys_exclusive: true
 
@@ -262,6 +308,8 @@ A downstream role can directly reference:
 {{ item.external_roles }}
 {{ item.groups }}
 {{ item.authorized_keys }}
+{{ item.sudo }}
+{{ item.sudo_nopass }}
 ```
 
 without duplicating merge logic or maintaining separate identity inventories.
@@ -364,7 +412,7 @@ baseline_nfs_mounts:
 
 | Tag | Description |
 |------|-------------|
-| `users` | User and SSH configuration |
+| `users` | User, sudo, and SSH configuration |
 | `timezone` | Timezone configuration |
 | `nfs` | NFS client configuration and mounts |
 | `packages` | Package installation |
