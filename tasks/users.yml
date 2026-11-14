@@ -25,12 +25,16 @@
       - item.sudo_nopass is not defined or item.sudo_nopass is boolean
       - not (item.sudo_nopass | default(false) | bool) or (item.sudo | default(false) | bool)
 
+      - item.password is not defined or (item.password is string and item.password | length > 0)
+      - item.password_remove is not defined or item.password_remove is boolean
+      - not (item.password_remove | default(false) | bool) or item.password is not defined
     fail_msg: >-
       Invalid user definition for
       {{ item.name | default('undefined') }}.
   loop: "{{ baseline_users_global + baseline_users_group + baseline_users_host }}"
   loop_control:
     label: "{{ item.name | default('undefined') }}"
+  no_log: true
 
 - name: Initialize merged user list
   ansible.builtin.set_fact:
@@ -59,6 +63,7 @@
   loop: "{{ baseline_users_global + baseline_users_group + baseline_users_host }}"
   loop_control:
     label: "{{ item.name }}"
+  no_log: true
 
 - name: Ensure primary group exists
   ansible.builtin.group:
@@ -69,6 +74,7 @@
   loop_control:
     loop_var: user
     label: "{{ user.name }}"
+  no_log: true
 
 - name: Ensure supplemental groups exist
   ansible.builtin.group:
@@ -85,22 +91,19 @@
   when:
     - merged_baseline_users | length > 0
     - item | length > 0
+  no_log: true
 
 - name: Ensure user exists
   ansible.builtin.user:
     name: "{{ user.name }}"
     uid: "{{ user.uid | default(omit) }}"
-
     group: "{{ user.name }}"
-
     groups: >-
       {{
         user.groups | default([])
         | join(',')
       }}
-
     append: true
-
     shell: >-
       {{
         user.shell
@@ -109,15 +112,39 @@
             | ternary('/usr/sbin/nologin', '/bin/bash')
           )
       }}
-
     home: "{{ user.home | default(omit) }}"
     create_home: "{{ user.home is defined }}"
     system: "{{ user.system | default(user.home is not defined) }}"
+    password: >-
+      {{
+        user.password
+        | password_hash(
+            'sha512',
+            salt=((inventory_hostname ~ ':' ~ user.name) | hash('sha256'))[:16]
+          )
+        if user.password is defined else omit
+      }}
+    update_password: always
     state: present
   loop: "{{ merged_baseline_users }}"
   loop_control:
     loop_var: user
     label: "{{ user.name }}"
+  no_log: true
+
+- name: Remove user passwords
+  ansible.builtin.command:
+    argv:
+      - passwd
+      - --delete
+      - "{{ user.name }}"
+  when: user.password_remove | default(false) | bool
+  loop: "{{ merged_baseline_users }}"
+  loop_control:
+    loop_var: user
+    label: "{{ user.name }}"
+  changed_when: true
+  no_log: true
 
 - name: Configure sudo privileges
   ansible.builtin.copy:
@@ -133,6 +160,7 @@
   loop_control:
     loop_var: user
     label: "{{ user.name }}"
+  no_log: true
 
 - name: Remove sudo privileges when disabled
   ansible.builtin.file:
@@ -143,6 +171,7 @@
   loop_control:
     loop_var: user
     label: "{{ user.name }}"
+  no_log: true
 
 - name: Ensure .ssh directory exists
   ansible.builtin.file:
@@ -158,6 +187,7 @@
   loop_control:
     loop_var: user
     label: "{{ user.name }}"
+  no_log: true
 
 - name: Configure authorized keys
   ansible.posix.authorized_key:
@@ -170,6 +200,31 @@
   loop_control:
     loop_var: user
     label: "{{ user.name }}"
+  no_log: true
+
+- name: Initialize baseline user metadata
+  ansible.builtin.set_fact:
+    baseline_users_model: []
+
+- name: Build baseline user metadata without passwords
+  ansible.builtin.set_fact:
+    baseline_users_model: >-
+      {{
+        baseline_users_model
+        +
+        [
+          (
+            item
+            | dict2items
+            | rejectattr('key', 'equalto', 'password')
+            | rejectattr('key', 'equalto', 'password_remove')
+            | items2dict
+          )
+        ]
+      }}
+  loop: "{{ merged_baseline_users }}"
+  loop_control:
+    label: "{{ item.name }}"
   no_log: true
 
 - name: Ensure /etc/ansible exists
@@ -188,4 +243,4 @@
     group: root
     mode: "0600"
   vars:
-    baseline_users_model: "{{ merged_baseline_users }}"
+    baseline_users_model: "{{ baseline_users_model }}"

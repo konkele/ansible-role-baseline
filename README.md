@@ -1,4 +1,4 @@
-# Baseline Ansible Role
+# Ansible Role: Baseline
 
 The **`baseline` role** provides baseline Linux configuration and identity management for Debian and Ubuntu systems.
 
@@ -25,6 +25,8 @@ The account used to run the role must be permitted to use sudo on the target hos
 - Manage supplemental Linux groups
 - Optional UID and GID assignment
 - Configure SSH authorized keys
+- Manage optional user passwords
+- Explicitly remove user passwords
 - Configure optional sudo privileges
 - Support passwordless and password-required sudo
 - Support system accounts
@@ -56,6 +58,7 @@ The account used to run the role must be permitted to use sudo on the target hos
 - Persist merged user definitions
 - Provide a consistent data contract for downstream roles
 - Enable platform-wide identity reuse
+- Exclude plaintext passwords from persisted metadata
 
 ---
 
@@ -97,6 +100,70 @@ Users can define `authorized_keys` to manage SSH public keys. The `authorized_ke
 
 Users can optionally define `groups` to manage supplemental Linux group membership. Referenced groups are created automatically and assigned to the user.
 
+### Password Management
+
+Users can optionally define a password or explicitly request password removal.
+
+| Attribute | Default | Description |
+|---|---|---|
+| `password` | Undefined | Sets or updates the user's password |
+| `password_remove` | `false` | Removes the user's existing password |
+
+Passwords are supplied as plaintext variables, preferably protected using Ansible Vault. The role converts them into SHA-512 password hashes before applying them to Linux accounts.
+
+The password hash uses a deterministic salt derived from the inventory hostname and username. This ensures repeated playbook runs produce the same hash rather than continually changing the account password.
+
+Example:
+
+```yaml
+baseline_users_host:
+  - name: admin
+    password: "{{ vault_admin_password }}"
+
+  - name: ansible
+    password_remove: true
+
+  - name: developer
+```
+
+Password behavior:
+
+- `password` defined: Set or update the account password.
+- `password` changed: Update the account password on the next run.
+- `password_remove: true`: Remove the existing account password.
+- Neither attribute defined: Leave the existing password unchanged.
+
+Do not define `password` and `password_remove` together.
+
+**Important:** Removing a password is not the same as locking an account. An account without a password may permit passwordless authentication through some local authentication configurations. Consider the security implications before removing passwords from normal user accounts.
+
+Password values are excluded from `/etc/ansible/baseline_users.yml`. The role also suppresses task output for password-related operations.
+
+#### Ansible Vault Example
+
+Store the password in an encrypted Vault variable:
+
+```yaml
+vault_admin_password: "your-password"
+```
+
+Reference it from inventory:
+
+```yaml
+baseline_users_host:
+  - name: admin
+    password: "{{ vault_admin_password }}"
+```
+
+Encrypt a variable directly:
+
+```bash
+ansible-vault encrypt_string \
+  --stdin-name 'vault_admin_password'
+```
+
+This keeps plaintext passwords out of ordinary inventory files.
+
 ### Sudo Configuration
 
 Users can optionally define two attributes to manage sudo privileges:
@@ -118,7 +185,7 @@ baseline_users_global:
 
   - name: ansible
     sudo: true
-    sudo_nopass: false
+    sudo_nopass: true
 
   - name: developer
     sudo: true
@@ -164,7 +231,7 @@ baseline_users_global:
 
 The baseline role does not interpret these additional fields.
 
-Any additional user attributes are preserved during the merge process and persisted to the generated metadata file. This allows a single user definition to act as the source of truth for Linux account management and platform-specific integrations.
+Any additional user attributes are preserved during the merge process and persisted to the generated metadata file, with the exception of plaintext password values. This allows a single user definition to act as the source of truth for Linux account management and platform-specific integrations.
 
 Downstream roles can consume custom fields without reimplementing inventory merging logic.
 
@@ -179,6 +246,8 @@ After execution, the role writes the fully merged user model to:
 ```
 
 This file acts as the canonical identity contract for downstream roles.
+
+Plaintext password values are never included in this file.
 
 ### Example
 
@@ -412,7 +481,7 @@ baseline_nfs_mounts:
 
 | Tag | Description |
 |------|-------------|
-| `users` | User, sudo, and SSH configuration |
+| `users` | User, password, sudo, and SSH configuration |
 | `timezone` | Timezone configuration |
 | `nfs` | NFS client configuration and mounts |
 | `packages` | Package installation |
