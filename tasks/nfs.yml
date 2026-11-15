@@ -13,14 +13,16 @@
     group: root
     mode: "0755"
   loop: "{{ baseline_nfs_mounts }}"
-  when: baseline_nfs_mounts | length > 0
+  loop_control:
+    label: "{{ item.dest }}"
 
 - name: Mount NFS shares
-  ansible.builtin.mount:
+  ansible.posix.mount:
     path: "{{ item.dest }}"
     src: "{{ item.src }}"
     fstype: "{{ item.fstype | default('nfs') }}"
     opts: "{{ item.opts | default('rw,sync,hard,intr') }}"
     state: "{{ item.state | default('mounted') }}"
   loop: "{{ baseline_nfs_mounts }}"
-  when: baseline_nfs_mounts | length > 0
+  loop_control:
+    label: "{{ item.dest }}"
